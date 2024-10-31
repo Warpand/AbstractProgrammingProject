@@ -1,0 +1,12 @@
+BasedOnStyle: Chromium
+IndentWidth: 4
+ColumnLimit: 88
+
+AlignAfterOpenBracket: BlockIndent
+BinPackArguments: false
+BinPackParameters: false
+
+AlignOperands: Align
+BreakBeforeBinaryOperators: NonAssignment
+
+IncludeBlocks: Preserve
