@@ -1,14 +1,11 @@
 #include <iostream>
 
-#include <boost/filesystem/operations.hpp>
+#include <boost/container/small_vector.hpp>
 
-struct testCpp20 {
-    int x;
-
-    bool operator==(const testCpp20&) const = default;
-};
-
-int main(int argc, char* argv[]) {
-    std::cout << "The size of " << boost::filesystem::absolute(argv[0]) << " is "
-              << boost::filesystem::file_size(argv[0]) << std::endl;
+int main() {
+    boost::container::small_vector<int, 3> numbers{1, 2, 3};
+    std::cout << numbers.size() << '\n';
+    for (const int n : numbers)
+        std::cout << n << ' ';
+    std::cout << '\n';
 }
