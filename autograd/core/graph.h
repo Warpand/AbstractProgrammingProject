@@ -47,19 +47,20 @@ class Node {
     void topological_sort_recursion(
         std::vector<Node*>& result,
         std::unordered_set<Node*>& visited
-    ) const {
+    ) {
         visited.insert(this);
         for (size_t i = 0; i < backward_edges.size(); i++) {
-            Node* target = backward_edges[i]->target();
+            Node* target = backward_edges[i]->get_target();
             if (!visited.contains(target))
                 target->topological_sort_recursion(result, visited);
         }
-        result.add(this);
+        result.push_back(this);
     }
 
-    std::vector<Node*> topological_sort() const {
+    std::vector<Node*> topological_sort() {
         std::vector<Node*> result;
-        topological_sort_recursion(result, std::unordered_set<Node*>());
+        std::unordered_set<Node*> visited;
+        topological_sort_recursion(result, visited);
         std::reverse(result.begin(), result.end());
         return result;
     }
@@ -87,6 +88,8 @@ class Node {
         grad = std::make_unique<F>(FieldTraits<F>::one);
         for (Node* node : order)
             node->do_backward();
+        for (Node* node : order)  // garbage collect
+            node->backward_edges.clear();
     }
 
     void accumulate_grad(typename FieldTraits<F>::arg_type passed_value) {
@@ -99,6 +102,12 @@ class Node {
     [[nodiscard]] bool is_leaf() const { return backward_edges.empty(); }
 
     [[nodiscard]] bool get_requires_grad() const { return requires_grad; }
+
+    [[nodiscard]] F& data() { return _data; }
+
+    [[nodiscard]] const F& data() const { return _data; }
+
+    [[nodiscard]] const F& get_grad() const { return *grad; }
 };
 }  // namespace autograd
 

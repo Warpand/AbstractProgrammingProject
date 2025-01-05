@@ -1,11 +1,10 @@
 #include <iostream>
 
-#include <boost/container/small_vector.hpp>
+#include "autograd/core/autograd.h"
 
 int main() {
-    boost::container::small_vector<int, 3> numbers{1, 2, 3};
-    std::cout << numbers.size() << '\n';
-    for (const int n : numbers)
-        std::cout << n << ' ';
-    std::cout << '\n';
+    autograd::AutoGrad x(2.0, true);
+    autograd::AutoGrad<double> y = autograd::Identity<double>::call(x);
+    y.backward();
+    std::cout << x.grad() << std::endl;
 }
