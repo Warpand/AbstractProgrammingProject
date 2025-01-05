@@ -37,9 +37,11 @@ class AutoGrad {
 template <Field F, template <Field> typename AutoGradFunc>
 class Function {
     class SingleEdge final : public Edge<F> {
+        // clang-format off
         typedef std::function<
-            typename FieldTraits<F>::arg_type(typename FieldTraits<F>::arg_type)>
-            BackwardFuncType;
+            typename FieldTraits<F>::arg_type(typename FieldTraits<F>::arg_type)
+        > BackwardFuncType;
+        // clang-format on
         BackwardFuncType backward_func;
 
        public:

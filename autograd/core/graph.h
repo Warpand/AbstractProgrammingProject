@@ -88,8 +88,8 @@ class Node {
         grad = std::make_unique<F>(FieldTraits<F>::one);
         for (Node* node : order)
             node->do_backward();
-        for (Node* node : order)  // garbage collect
-            node->backward_edges.clear();
+        for (Node* node : order)
+            node->backward_edges.clear();  // "garbage collect"
     }
 
     void accumulate_grad(typename FieldTraits<F>::arg_type passed_value) {
