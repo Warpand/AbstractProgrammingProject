@@ -1,8 +1,6 @@
 #ifndef AUTOGRAD_H
 #define AUTOGRAD_H
 
-#include <functional>
-
 #include "concepts.h"
 #include "context.h"
 #include "graph.h"
@@ -13,13 +11,17 @@ class AutoGrad {
     std::shared_ptr<Node<F>> node;
 
    public:
-    AutoGrad(F& data, bool requires_grad = false)
-        : node(std::make_shared<Node<F>>(data, requires_grad)) {}
+    explicit AutoGrad(F& data, bool requires_grad = false)
+        : node(std::make_shared<LeafNode<F>>(data, requires_grad)) {}
 
-    AutoGrad(F&& data, bool requires_grad = false)
-        : node(std::make_shared<Node<F>>(data, requires_grad)) {}
+    explicit AutoGrad(F&& data, bool requires_grad = false)
+        : node(std::make_shared<LeafNode<F>>(data, requires_grad)) {}
 
-    std::shared_ptr<Node<F>> get_node() { return node; }
+    explicit AutoGrad(std::shared_ptr<Node<F>>& node) : node(node) {}
+
+    explicit AutoGrad(std::shared_ptr<Node<F>>&& node) : node(std::move(node)) {}
+
+    void connect(AutoGrad& other) { node->add_edge(other.node); }
 
     F& data() { return node->data(); }
 
@@ -32,37 +34,23 @@ class AutoGrad {
     [[nodiscard]] bool is_leaf() const { return node->is_leaf(); }
 
     void backward() { node->backward(); }
+
+    AutoGrad copy(bool requires_grad = false) {
+        return AutoGrad(node->data(), requires_grad);
+    }
 };
 
 template <Field F, template <Field> typename AutoGradFunc>
 class Function {
-    class SingleEdge final : public Edge<F> {
-        // clang-format off
-        typedef std::function<
-            typename FieldTraits<F>::arg_type(typename FieldTraits<F>::arg_type)
-        > BackwardFuncType;
-        // clang-format on
-        BackwardFuncType backward_func;
-
-       public:
-        SingleEdge(std::shared_ptr<Node<F>> target, BackwardFuncType backward_func)
-            : Edge<F>(target), backward_func(backward_func) {}
-
-        void backward(typename FieldTraits<F>::arg_type source_grad) override {
-            Edge<F>::pass_to_target(
-                backward_func(Edge<F>::get_target()->data()), source_grad
-            );
-        }
-    };
-
    public:
-    static AutoGrad<F> call(AutoGrad<F>& arg) {
+    static AutoGrad<F> call(AutoGrad<F> arg) {
         F func_output = AutoGradFunc<F>::forward(arg.data());
-        AutoGrad<F> result(std::move(func_output));
+        auto node = std::make_shared<UnaryNode<F>>(
+            std::move(func_output), AutoGradFunc<F>::backward
+        );
+        AutoGrad<F> result(std::move(node));
         if (GradContext<F>::grad_enabled() && (!arg.is_leaf() || arg.requires_grad())) {
-            result.get_node()->add_edge(
-                std::make_unique<SingleEdge>(arg.get_node(), AutoGradFunc<F>::backward)
-            );
+            result.connect(arg);
         }
         return result;
     }
@@ -73,9 +61,7 @@ class Identity : public Function<F, Identity> {
    public:
     static F forward(typename FieldTraits<F>::arg_type x) { return x; }
 
-    static F backward(typename FieldTraits<F>::arg_type x) {
-        return FieldTraits<F>::one;
-    }
+    static F backward(typename FieldTraits<F>::arg_type) { return FieldTraits<F>::one; }
 };
 
 template <>
