@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <memory>
+#include <ranges>
 #include <unordered_set>
 #include <vector>
 
@@ -13,20 +14,49 @@
 
 namespace autograd {
 template <Field F>
+class Node;
+
+template <Field F>
+class BackwardFunc {
+   protected:
+    static void pass_to_target(
+        Node<F>* target,
+        typename FieldTraits<F>::arg_type target_grad,
+        typename FieldTraits<F>::arg_type source_grad
+    ) {
+        if (target->requires_backward())
+            target->accumulate_grad(target_grad * source_grad);
+    }
+
+   public:
+    virtual void backward(
+        typename Node<F>::BackwardEdges& targets,
+        typename FieldTraits<F>::arg_type source_grad
+    ) = 0;
+    virtual ~BackwardFunc() = default;
+};
+
+template <Field F>
 class Node {
+   public:
+    typedef boost::container::small_vector<std::shared_ptr<Node>, INLINE_EDGE_CAPACITY>
+        BackwardEdges;
+
+   private:
+    constexpr static auto SECOND_PASS_ERR_MSG =
+        "Trying to backward through the graph a second time.";
     constexpr static auto BACKWARD_ERR_MSG =
-        "Error: calling backward on a leaf node.\n Backward was called on a user "
-        "created leaf node or a node that has already passed its gradient.";
+        "Calling backward on a node that does not require grad and has no backward "
+        "function defined.";
+    constexpr static auto SET_REQUIRES_GRAD_ERR_MSG =
+        "Changing requires_grad is possible only for leaf nodes.";
 
     F _data;
     bool requires_grad;
     std::unique_ptr<F> grad = nullptr;
+    std::unique_ptr<BackwardFunc<F>> backward_func = nullptr;
+    BackwardEdges backward_edges;
 
-   protected:
-    boost::container::small_vector<std::shared_ptr<Node>, INLINE_EDGE_CAPACITY>
-        backward_edges;
-
-   private:
     void topological_sort_recursion(
         std::vector<Node*>& result,
         std::unordered_set<Node*>& visited
@@ -47,16 +77,16 @@ class Node {
         return result;
     }
 
+    void pre_backward() {
+        if (!is_leaf() && backward_edges.empty())
+            throw std::runtime_error(SECOND_PASS_ERR_MSG);
+    }
+
+    void do_backward() { backward_func->backward(backward_edges, *grad); }
+
     void post_backward() {
         if (!requires_grad)
             grad = nullptr;
-    }
-
-   protected:
-    virtual void do_backward() = 0;
-
-    void pass_backward(Node* target, typename FieldTraits<F>::arg_type target_grad) {
-        target->accumulate_grad(*grad * target_grad);
     }
 
    public:
@@ -73,11 +103,13 @@ class Node {
     }
 
     void backward() {
-        if (is_leaf())
+        if (!requires_backward())
             throw std::runtime_error(BACKWARD_ERR_MSG);
         std::vector<Node*> order = topological_sort();
         grad = std::make_unique<F>(FieldTraits<F>::one);
-        for (Node* node : order) {
+        for (Node* node :
+             order | std::views::filter([](const Node* n) { return !n->is_leaf(); })) {
+            node->pre_backward();
             node->do_backward();
             node->post_backward();
         }
@@ -92,46 +124,45 @@ class Node {
             *grad += passed_value;
     }
 
-    [[nodiscard]] bool is_leaf() const { return backward_edges.empty(); }
+    void set_backward_func(std::unique_ptr<BackwardFunc<F>>&& func) {
+        backward_func = std::move(func);
+    }
 
-    [[nodiscard]] bool get_requires_grad() const { return requires_grad; }
+    void set_requires_grad(const bool value) {
+        if (!is_leaf())
+            throw std::runtime_error(SET_REQUIRES_GRAD_ERR_MSG);
+        requires_grad = value;
+    }
+
+    [[nodiscard]] bool is_leaf() const { return backward_func == nullptr; }
+
+    [[nodiscard]] bool requires_backward() const { return !is_leaf() || requires_grad; }
 
     [[nodiscard]] F& data() { return _data; }
 
     [[nodiscard]] const F& data() const { return _data; }
 
     [[nodiscard]] const F& get_grad() const { return *grad; }
-
-    virtual ~Node() = default;
 };
 
 template <Field F>
-class LeafNode final : public Node<F> {
-   public:
-    using Node<F>::Node;
-
-    void do_backward() override {}
-};
-
-template <Field F>
-class UnaryNode final : public Node<F> {
+class UnaryBackwardFunc final : public BackwardFunc<F> {
     // clang-format off
     typedef std::function<
         typename FieldTraits<F>::arg_type(typename FieldTraits<F>::arg_type)
-    > BackwardFuncType;
+    > FuncType;
     // clang-format on
-    BackwardFuncType backward_func;
+    FuncType func;
 
    public:
-    UnaryNode(F& data, BackwardFuncType backward_func)
-        : Node<F>(data), backward_func(backward_func) {}
+    explicit UnaryBackwardFunc(FuncType func) : func(func) {}
 
-    UnaryNode(F&& data, BackwardFuncType backward_func)
-        : Node<F>(std::move(data)), backward_func(backward_func) {}
-
-    void do_backward() override {
-        Node<F>::pass_backward(
-            Node<F>::backward_edges[0].get(), backward_func(Node<F>::data())
+    void backward(
+        typename Node<F>::BackwardEdges& targets,
+        typename FieldTraits<F>::arg_type source_grad
+    ) override {
+        BackwardFunc<F>::pass_to_target(
+            targets[0].get(), func(targets[0]->data()), source_grad
         );
     }
 };

@@ -12,10 +12,10 @@ class AutoGrad {
 
    public:
     explicit AutoGrad(F& data, bool requires_grad = false)
-        : node(std::make_shared<LeafNode<F>>(data, requires_grad)) {}
+        : node(std::make_shared<Node<F>>(data, requires_grad)) {}
 
     explicit AutoGrad(F&& data, bool requires_grad = false)
-        : node(std::make_shared<LeafNode<F>>(data, requires_grad)) {}
+        : node(std::make_shared<Node<F>>(data, requires_grad)) {}
 
     explicit AutoGrad(std::shared_ptr<Node<F>>& node) : node(node) {}
 
@@ -29,15 +29,15 @@ class AutoGrad {
 
     const F& grad() const { return node->get_grad(); }
 
-    [[nodiscard]] bool requires_grad() const { return node->get_requires_grad(); }
-
-    [[nodiscard]] bool is_leaf() const { return node->is_leaf(); }
+    [[nodiscard]] bool requires_grad() const { return node->requires_backward(); }
 
     void backward() { node->backward(); }
 
     AutoGrad copy(bool requires_grad = false) {
         return AutoGrad(node->data(), requires_grad);
     }
+
+    void set_requires_grad(bool value) {}
 };
 
 template <Field F, template <Field> typename AutoGradFunc>
@@ -45,12 +45,13 @@ class Function {
    public:
     static AutoGrad<F> call(AutoGrad<F> arg) {
         F func_output = AutoGradFunc<F>::forward(arg.data());
-        auto node = std::make_shared<UnaryNode<F>>(
-            std::move(func_output), AutoGradFunc<F>::backward
-        );
-        AutoGrad<F> result(std::move(node));
-        if (GradContext<F>::grad_enabled() && (!arg.is_leaf() || arg.requires_grad())) {
+        auto node = std::make_shared<Node<F>>(std::move(func_output));
+        AutoGrad<F> result(node);
+        if (GradContext<F>::grad_enabled() && arg.requires_grad()) {
             result.connect(arg);
+            node->set_backward_func(
+                std::make_unique<UnaryBackwardFunc<F>>(AutoGradFunc<F>::backward)
+            );
         }
         return result;
     }
