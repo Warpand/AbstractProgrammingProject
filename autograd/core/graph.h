@@ -96,7 +96,7 @@ class Node {
     explicit Node(F&& data, const bool requires_grad = false)
         : _data(std::move(data)), requires_grad(requires_grad) {}
 
-    void add_edge(std::shared_ptr<Node>& edge) { backward_edges.push_back(edge); }
+    void add_edge(const std::shared_ptr<Node>& edge) { backward_edges.push_back(edge); }
 
     void add_edge(std::shared_ptr<Node>&& edge) {
         backward_edges.push_back(std::move(edge));
@@ -143,15 +143,13 @@ class Node {
     [[nodiscard]] const F& data() const { return _data; }
 
     [[nodiscard]] const F& get_grad() const { return *grad; }
+
+    [[nodiscard]] bool has_grad() const { return grad != nullptr; }
 };
 
 template <Field F>
 class UnaryBackwardFunc final : public BackwardFunc<F> {
-    // clang-format off
-    typedef std::function<
-        typename FieldTraits<F>::arg_type(typename FieldTraits<F>::arg_type)
-    > FuncType;
-    // clang-format on
+    typedef std::function<F(typename FieldTraits<F>::arg_type)> FuncType;
     FuncType func;
 
    public:
@@ -163,6 +161,77 @@ class UnaryBackwardFunc final : public BackwardFunc<F> {
     ) override {
         BackwardFunc<F>::pass_to_target(
             targets[0].get(), func(targets[0]->data()), source_grad
+        );
+    }
+};
+
+template <Field F>
+class BinaryBackwardFunc final : public BackwardFunc<F> {
+    // clang-format off
+    typedef std::function<
+        std::pair<F, F>(
+            typename FieldTraits<F>::arg_type,
+            typename FieldTraits<F>::arg_type
+        )
+    > FuncType;
+    // clang-format off
+    FuncType func;
+
+public:
+    explicit BinaryBackwardFunc(FuncType func) : func(func) {}
+
+    void backward(
+        typename Node<F>::BackwardEdges& targets,
+        typename FieldTraits<F>::arg_type source_grad
+    ) override {
+        std::pair<F, F> grad = func(targets[0]->data(), targets[1]->data());
+        BackwardFunc<F>::pass_to_target(targets[0].get(), grad.first, source_grad);
+        BackwardFunc<F>::pass_to_target(targets[1].get(), grad.second, source_grad);
+    }
+};
+
+template <Field F, int NUM_ARGS>
+class MultiArgBackwardFunction final : public BackwardFunc<F> {
+    static_assert(NUM_ARGS > 0);
+    // clang-format off
+    typedef std::function<
+        std::array<F, NUM_ARGS>(std::array<typename FieldTraits<F>::arg_type, NUM_ARGS>)
+    > FuncType;
+    // clang-format off
+    FuncType func;
+
+public:
+    explicit MultiArgBackwardFunction(FuncType func) : func(func) {}
+
+    void backward(
+        typename Node<F>::BackwardEdges& targets,
+        typename FieldTraits<F>::arg_type source_grad
+    ) override {
+        std::array<typename FieldTraits<F>::arg_type, NUM_ARGS> grad_args;
+        for (int i = 0; i < NUM_ARGS; i++)
+            grad_args[i] = targets[i]->data();
+        std::array<F, NUM_ARGS> grad = func(grad_args);
+        for (int i = 0; i < NUM_ARGS; i++)
+            BackwardFunc<F>::pass_to_target(targets[i].get(), grad[i], source_grad);
+    }
+
+};
+
+template <Field F, typename ScalarType>
+class ScalarBackwardFunc final : public BackwardFunc<F> {
+    typedef std::function<F(typename FieldTraits<F>::arg_type, ScalarType)> FuncType;
+    FuncType func;
+    ScalarType scalar;
+
+public:
+    ScalarBackwardFunc(FuncType func, ScalarType scalar) : func(func), scalar(scalar) {}
+
+    void backward(
+        typename Node<F>::BackwardEdges& targets,
+        typename FieldTraits<F>::arg_type source_grad
+    ) override {
+        BackwardFunc<F>::pass_to_target(
+            targets[0].get(), func(targets[0]->data(), scalar), source_grad
         );
     }
 };

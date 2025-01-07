@@ -17,7 +17,9 @@ concept Field = requires(T x, T y) {
     { x - y };
     { x / y };
     { x += y };
+    { -x };
     { FieldTraits<T>::one };
+    { FieldTraits<T>::reverse(x) };
     typename FieldTraits<T>::arg_type;
 };
 }  // namespace autograd
