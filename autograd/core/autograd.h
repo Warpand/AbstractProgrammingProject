@@ -45,28 +45,28 @@ class AutoGrad {
     void set_requires_grad(bool value) { node->set_requires_grad(value); }
 };
 
-template <Field F, template <Field> typename AutoGradFunc>
+template <Field F, typename AutoGradFunc>
 class Function {
    public:
     static AutoGrad<F> call(const AutoGrad<F>& arg) {
-        F func_output = AutoGradFunc<F>::forward(arg.data());
+        F func_output = AutoGradFunc::forward(arg.data());
         auto node = std::make_shared<Node<F>>(std::move(func_output));
         AutoGrad<F> result(node);
         if (GradContext<F>::grad_enabled() && arg.requires_grad()) {
             result.connect(arg);
             node->set_backward_func(
-                std::make_unique<UnaryBackwardFunc<F>>(AutoGradFunc<F>::backward)
+                std::make_unique<UnaryBackwardFunc<F>>(AutoGradFunc::backward)
             );
         }
         return result;
     }
 };
 
-template <Field F, template <Field> typename AutoGradBiFunc>
+template <Field F, typename AutoGradBiFunc>
 class BiFunction {
    public:
     static AutoGrad<F> call(const AutoGrad<F>& x, const AutoGrad<F>& y) {
-        F func_output = AutoGradBiFunc<F>::forward(x.data(), y.data());
+        F func_output = AutoGradBiFunc::forward(x.data(), y.data());
         auto node = std::make_shared<Node<F>>(std::move(func_output));
         AutoGrad<F> result(node);
         if (GradContext<F>::grad_enabled()
@@ -74,14 +74,14 @@ class BiFunction {
             result.connect(x);
             result.connect(y);
             node->set_backward_func(
-                std::make_unique<BinaryBackwardFunc<F>>(AutoGradBiFunc<F>::backward)
+                std::make_unique<BinaryBackwardFunc<F>>(AutoGradBiFunc::backward)
             );
         }
         return result;
     }
 };
 
-template <Field F, int NUM_ARGS, template <Field, int> typename AutoGradMultiFunc>
+template <Field F, int NUM_ARGS, typename AutoGradMultiFunc>
 class MultiFunction {
     static_assert(
         NUM_ARGS > 0,
@@ -103,7 +103,7 @@ class MultiFunction {
         std::array<typename FieldTraits<F>::arg_type, NUM_ARGS> func_args;
         for (int i = 0; i < NUM_ARGS; i++)
             func_args[i] = args[i].data();
-        F func_output = AutoGradMultiFunc<F, NUM_ARGS>::forward(func_args);
+        F func_output = AutoGradMultiFunc::forward(func_args);
         auto node = std::make_shared<Node<F>>(std::move(func_output));
         AutoGrad<F> result(node);
         if (GradContext<F>::grad_enabled()
@@ -114,7 +114,7 @@ class MultiFunction {
                 result.connect(other);
             node->set_backward_func(
                 std::make_unique<MultiArgBackwardFunction<F, NUM_ARGS>>(
-                    AutoGradMultiFunc<F, NUM_ARGS>::backward
+                    AutoGradMultiFunc::backward
                 )
             );
         }
@@ -122,17 +122,17 @@ class MultiFunction {
     }
 };
 
-template <Field F, typename ScalarType, template <Field> typename AutoGradScalarFunc>
+template <Field F, typename ScalarType, typename AutoGradScalarFunc>
 class ScalarFunction {
    public:
     static AutoGrad<F> call(const AutoGrad<F>& arg, ScalarType scalar) {
-        F func_output = AutoGradScalarFunc<F>::forward(arg.data(), scalar);
+        F func_output = AutoGradScalarFunc::forward(arg.data(), scalar);
         auto node = std::make_shared<Node<F>>(std::move(func_output));
         AutoGrad<F> result(node);
         if (GradContext<F>::grad_enabled() && arg.requires_grad()) {
             result.connect(arg);
             node->set_backward_func(std::make_unique<ScalarBackwardFunc<F, ScalarType>>(
-                AutoGradScalarFunc<F>::backward, scalar
+                AutoGradScalarFunc::backward, scalar
             ));
         }
         return result;
@@ -140,7 +140,7 @@ class ScalarFunction {
 };
 
 template <Field F>
-class Identity : public Function<F, Identity> {
+class Identity : public Function<F, Identity<F>> {
    public:
     static F forward(typename FieldTraits<F>::arg_type x) { return x; }
 
@@ -148,7 +148,7 @@ class Identity : public Function<F, Identity> {
 };
 
 template <Field F>
-class Mul : public BiFunction<F, Mul> {
+class Mul : public BiFunction<F, Mul<F>> {
    public:
     static F
     forward(typename FieldTraits<F>::arg_type x, typename FieldTraits<F>::arg_type y) {
@@ -162,7 +162,7 @@ class Mul : public BiFunction<F, Mul> {
 };
 
 template <Field F>
-class Add : public BiFunction<F, Add> {
+class Add : public BiFunction<F, Add<F>> {
    public:
     static F
     forward(typename FieldTraits<F>::arg_type x, typename FieldTraits<F>::arg_type y) {
@@ -176,7 +176,7 @@ class Add : public BiFunction<F, Add> {
 };
 
 template <Field F>
-class Subtract : public BiFunction<F, Subtract> {
+class Subtract : public BiFunction<F, Subtract<F>> {
    public:
     static F
     forward(typename FieldTraits<F>::arg_type x, typename FieldTraits<F>::arg_type y) {
@@ -190,7 +190,7 @@ class Subtract : public BiFunction<F, Subtract> {
 };
 
 template <typename F>
-class Div : public BiFunction<F, Div> {
+class Div : public BiFunction<F, Div<F>> {
    public:
     static F
     forward(typename FieldTraits<F>::arg_type x, typename FieldTraits<F>::arg_type y) {
@@ -204,7 +204,7 @@ class Div : public BiFunction<F, Div> {
 };
 
 template <Field F>
-class Pow : public ScalarFunction<F, int, Pow> {
+class Pow : public ScalarFunction<F, int, Pow<F>> {
     static F _call(typename FieldTraits<F>::arg_type x, const int exp) {
         if (exp >= 0)
             return Pow::_pow(x, exp);
@@ -233,7 +233,7 @@ class Pow : public ScalarFunction<F, int, Pow> {
 };
 
 template <typename F>
-class FlipSign : public Function<F, FlipSign> {
+class FlipSign : public Function<F, FlipSign<F>> {
    public:
     static F forward(typename FieldTraits<F>::arg_type x) { return -x; }
 

@@ -1,6 +1,9 @@
 #include <iostream>
 
 #include "autograd/core/autograd.h"
+#include "autograd/real/activations.h"
+#include "autograd/real/functions.h"
+#include "autograd/real/trigonometric.h"
 
 int main() {
     autograd::AutoGrad<double> t(2.0);
@@ -27,4 +30,22 @@ int main() {
     std::cout << r3 << ' ' << t3 << '\n';
     std::cout << r4 << ' ' << t4 << '\n';
     std::cout << r5 << ' ' << t5 << '\n';
+
+    std::cout << std::endl;
+
+    autograd::AutoGrad x1(1.0, true);
+    autograd::AutoGrad y1 = autograd::Sigmoid::call(x1);
+    y1.backward();
+
+    autograd::AutoGrad x2(1.0, true);
+    autograd::AutoGrad y2 = autograd::Exp::call(x2);
+    y2.backward();
+
+    autograd::AutoGrad x3(std::numbers::pi, true);
+    autograd::AutoGrad y3 = autograd::Sin::call(x3);
+    y3.backward();
+
+    std::cout << y1 << ' ' << x1 << '\n';
+    std::cout << y2 << ' ' << x2 << '\n';
+    std::cout << y3 << ' ' << x3 << '\n';
 }
