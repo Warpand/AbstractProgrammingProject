@@ -14,17 +14,17 @@ class AutoGrad {
     std::shared_ptr<Node<F>> node;
 
    public:
-    AutoGrad(F& data, bool requires_grad = false)
+    AutoGrad(const F& data, bool requires_grad = false)
         : node(std::make_shared<Node<F>>(data, requires_grad)) {}
 
     AutoGrad(F&& data, bool requires_grad = false)
         : node(std::make_shared<Node<F>>(data, requires_grad)) {}
 
-    explicit AutoGrad(std::shared_ptr<Node<F>>& node) : node(node) {}
+    explicit AutoGrad(const std::shared_ptr<Node<F>>& node) : node(node) {}
 
     explicit AutoGrad(std::shared_ptr<Node<F>>&& node) : node(std::move(node)) {}
 
-    void connect(const AutoGrad& other) { node->add_edge(other.node); }
+    void connect(const AutoGrad& other) const { node->add_edge(other.node); }
 
     [[nodiscard]] F& data() { return node->data(); }
 
@@ -36,9 +36,9 @@ class AutoGrad {
 
     [[nodiscard]] bool has_grad() const { return node->has_grad(); }
 
-    void backward() { node->backward(); }
+    void backward() const { node->backward(); }
 
-    AutoGrad copy(bool requires_grad = false) {
+    AutoGrad copy(bool requires_grad = false) const {
         return AutoGrad(node->data(), requires_grad);
     }
 
@@ -214,16 +214,9 @@ class Pow : public ScalarFunction<F, int, Pow> {
     static F _pow(F x, int exp) {
         F r = FieldTraits<F>::one;
         while (exp > 0) {
-            if (exp & 1) {
-                if constexpr (HasInPlaceOperators<F>)
-                    r *= x;
-                else
-                    r = r * x;
-            }
-            if constexpr (HasInPlaceOperators<F>)
-                x *= x;
-            else
-                x = x * x;
+            if (exp & 1)
+                r *= x;
+            x *= x;
             exp >>= 1;
         }
         return r;

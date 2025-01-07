@@ -90,7 +90,7 @@ class Node {
     }
 
    public:
-    explicit Node(F& data, const bool requires_grad = false)
+    explicit Node(const F& data, const bool requires_grad = false)
         : _data(data), requires_grad(requires_grad) {}
 
     explicit Node(F&& data, const bool requires_grad = false)
