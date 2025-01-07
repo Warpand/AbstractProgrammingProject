@@ -14,10 +14,10 @@ class AutoGrad {
     std::shared_ptr<Node<F>> node;
 
    public:
-    explicit AutoGrad(F& data, bool requires_grad = false)
+    AutoGrad(F& data, bool requires_grad = false)
         : node(std::make_shared<Node<F>>(data, requires_grad)) {}
 
-    explicit AutoGrad(F&& data, bool requires_grad = false)
+    AutoGrad(F&& data, bool requires_grad = false)
         : node(std::make_shared<Node<F>>(data, requires_grad)) {}
 
     explicit AutoGrad(std::shared_ptr<Node<F>>& node) : node(node) {}
@@ -175,7 +175,7 @@ class Add : public BiFunction<F, Add> {
     }
 };
 
-template <typename F>
+template <Field F>
 class Subtract : public BiFunction<F, Subtract> {
    public:
     static F
@@ -214,9 +214,16 @@ class Pow : public ScalarFunction<F, int, Pow> {
     static F _pow(F x, int exp) {
         F r = FieldTraits<F>::one;
         while (exp > 0) {
-            if (exp & 1)
-                r = r * x;
-            x = x * x;
+            if (exp & 1) {
+                if constexpr (HasInPlaceOperators<F>)
+                    r *= x;
+                else
+                    r = r * x;
+            }
+            if constexpr (HasInPlaceOperators<F>)
+                x *= x;
+            else
+                x = x * x;
             exp >>= 1;
         }
         return r;

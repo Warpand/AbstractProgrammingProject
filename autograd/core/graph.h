@@ -174,10 +174,10 @@ class BinaryBackwardFunc final : public BackwardFunc<F> {
             typename FieldTraits<F>::arg_type
         )
     > FuncType;
-    // clang-format off
+    // clang-format on
     FuncType func;
 
-public:
+   public:
     explicit BinaryBackwardFunc(FuncType func) : func(func) {}
 
     void backward(
@@ -197,10 +197,10 @@ class MultiArgBackwardFunction final : public BackwardFunc<F> {
     typedef std::function<
         std::array<F, NUM_ARGS>(std::array<typename FieldTraits<F>::arg_type, NUM_ARGS>)
     > FuncType;
-    // clang-format off
+    // clang-format on
     FuncType func;
 
-public:
+   public:
     explicit MultiArgBackwardFunction(FuncType func) : func(func) {}
 
     void backward(
@@ -214,7 +214,6 @@ public:
         for (int i = 0; i < NUM_ARGS; i++)
             BackwardFunc<F>::pass_to_target(targets[i].get(), grad[i], source_grad);
     }
-
 };
 
 template <Field F, typename ScalarType>
@@ -223,7 +222,7 @@ class ScalarBackwardFunc final : public BackwardFunc<F> {
     FuncType func;
     ScalarType scalar;
 
-public:
+   public:
     ScalarBackwardFunc(FuncType func, ScalarType scalar) : func(func), scalar(scalar) {}
 
     void backward(
