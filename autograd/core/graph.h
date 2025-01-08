@@ -113,8 +113,8 @@ class Node {
             node->do_backward();
             node->post_backward();
         }
-        for (Node* node : order)
-            node->backward_edges.clear();  // "garbage collect"
+        for (auto it = order.rbegin(); it != order.rend(); ++it)
+            (*it)->backward_edges.clear();  // "garbage collect"
     }
 
     void accumulate_grad(typename FieldTraits<F>::arg_type passed_value) {
@@ -142,7 +142,11 @@ class Node {
 
     [[nodiscard]] const F& data() const { return _data; }
 
-    [[nodiscard]] const F& get_grad() const { return *grad; }
+    [[nodiscard]] const F& get_grad() const {
+        if (grad == nullptr)
+            throw std::runtime_error("Accessing gradient of a node with no gradient.");
+        return *grad;
+    }
 
     [[nodiscard]] bool has_grad() const { return grad != nullptr; }
 };
@@ -195,7 +199,9 @@ class MultiArgBackwardFunction final : public BackwardFunc<F> {
     static_assert(NUM_ARGS > 0);
     // clang-format off
     typedef std::function<
-        std::array<F, NUM_ARGS>(std::array<typename FieldTraits<F>::arg_type, NUM_ARGS>)
+        std::array<F, NUM_ARGS>(
+            const std::array<typename FieldTraits<F>::arg_type, NUM_ARGS>&
+        )
     > FuncType;
     // clang-format on
     FuncType func;

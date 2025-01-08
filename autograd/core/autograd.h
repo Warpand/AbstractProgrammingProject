@@ -14,10 +14,10 @@ class AutoGrad {
     std::shared_ptr<Node<F>> node;
 
    public:
-    AutoGrad(const F& data, bool requires_grad = false)
+    explicit AutoGrad(const F& data, bool requires_grad = false)
         : node(std::make_shared<Node<F>>(data, requires_grad)) {}
 
-    AutoGrad(F&& data, bool requires_grad = false)
+    explicit AutoGrad(F&& data, bool requires_grad = false)
         : node(std::make_shared<Node<F>>(data, requires_grad)) {}
 
     explicit AutoGrad(const std::shared_ptr<Node<F>>& node) : node(node) {}
@@ -99,7 +99,7 @@ class MultiFunction {
     );
 
    public:
-    static AutoGrad<F> call(std::array<const AutoGrad<F>&, NUM_ARGS> args) {
+    static AutoGrad<F> call(const std::array<AutoGrad<F>, NUM_ARGS>& args) {
         std::array<typename FieldTraits<F>::arg_type, NUM_ARGS> func_args;
         for (int i = 0; i < NUM_ARGS; i++)
             func_args[i] = args[i].data();
@@ -110,8 +110,8 @@ class MultiFunction {
             && std::any_of(args.begin(), args.end(), [](const AutoGrad<F>& arg) {
                    return arg.requires_grad();
                })) {
-            for (AutoGrad<F>& other : args)
-                result.connect(other);
+            for (int i = 0; i < NUM_ARGS; i++)
+                result.connect(args[i]);
             node->set_backward_func(
                 std::make_unique<MultiArgBackwardFunction<F, NUM_ARGS>>(
                     AutoGradMultiFunc::backward
@@ -232,7 +232,7 @@ class Pow : public ScalarFunction<F, int, Pow<F>> {
     }
 };
 
-template <typename F>
+template <Field F>
 class FlipSign : public Function<F, FlipSign<F>> {
    public:
     static F forward(typename FieldTraits<F>::arg_type x) { return -x; }
