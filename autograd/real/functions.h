@@ -51,17 +51,15 @@ class Abs : public Function<double, Abs> {
 };
 
 class Distance : public MultiFunction<double, 4, Distance> {
-    static double _call(const std::array<double, 4>& args) {
+   public:
+    static double forward(const std::array<double, 4>& args) {
         const double dx = args[0] - args[2];
         const double dy = args[1] - args[3];
         return std::sqrt(dx * dx + dy * dy);
     }
 
-   public:
-    static double forward(std::array<double, 4> args) { return _call(args); }
-
-    static std::array<double, 4> backward(std::array<double, 4> args) {
-        const double dist = _call(args);
+    static std::array<double, 4> backward(const std::array<double, 4>& args) {
+        const double dist = forward(args);
         const double first = (args[0] - args[2]) / dist;
         const double second = (args[1] - args[3]) / dist;
         return {first, second, -first, -second};
